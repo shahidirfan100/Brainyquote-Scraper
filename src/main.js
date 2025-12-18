@@ -1,119 +1,141 @@
-// BrainyQuote motivational quotes scraper
+/**
+ * BrainyQuote Scraper - Production-Ready Playwright Implementation
+ * Uses Firefox with stealth mode for Cloudflare bypass
+ */
 import { Actor, log } from 'apify';
-import { Dataset } from 'crawlee';
-import { gotScraping } from 'got-scraping';
-import { load as cheerioLoad } from 'cheerio';
+import { PlaywrightCrawler, Dataset } from 'crawlee';
+import { firefox } from 'playwright';
 
 await Actor.init();
 
+// ─────────────────────────────────────────────────────────────────────────────
+// CONFIGURATION
+// ─────────────────────────────────────────────────────────────────────────────
+
 const DEFAULT_TOPIC = 'motivational';
-const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36';
+const BASE_URL = 'https://www.brainyquote.com';
 
-const toAbs = (href, base = 'https://www.brainyquote.com') => {
-    try { return new URL(href, base).href; } catch { return null; }
-};
+const USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14.2; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (X11; Linux x86_64; rv:121.0) Gecko/20100101 Firefox/121.0',
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:120.0) Gecko/20100101 Firefox/120.0',
+];
 
-const cleanText = (html) => {
-    if (!html) return '';
-    const $ = cheerioLoad(html);
-    $('script, style, noscript, iframe').remove();
-    return $.root().text().replace(/\s+/g, ' ').trim();
-};
+const getRandomUserAgent = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
+const randomDelay = (min = 2000, max = 5000) => Math.floor(Math.random() * (max - min + 1)) + min;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+// ─────────────────────────────────────────────────────────────────────────────
+// URL BUILDERS
+// ─────────────────────────────────────────────────────────────────────────────
 
 const normalizeTopic = (value = DEFAULT_TOPIC) => {
     const trimmed = String(value).trim().toLowerCase();
     return trimmed.replace(/\s+/g, '-').replace(/-quotes$/, '') || DEFAULT_TOPIC;
 };
 
-const topicUrl = (slug, page = 1) => {
-    const base = `https://www.brainyquote.com/topics/${slug}-quotes`;
-    return page > 1 ? `${base}?pg=${page}` : base;
+const normalizeAuthor = (value = '') => {
+    const trimmed = String(value).trim().toLowerCase();
+    return trimmed.replace(/\s+/g, '_').replace(/[^a-z0-9_]/g, '');
 };
 
-const unwrapMaybeJson = (body) => {
-    try {
-        const parsed = JSON.parse(body);
-        if (parsed && typeof parsed === 'object') {
-            if (typeof parsed.content === 'string') return parsed.content;
-            if (Array.isArray(parsed.content)) return parsed.content.join('\n');
-        }
-    } catch (_) {
-        /* body was not JSON */
-    }
-    return body;
+/**
+ * Build topic page URL with correct pagination format
+ * Page 1: /topics/motivational-quotes
+ * Page 2: /topics/motivational-quotes_2
+ */
+const buildTopicUrl = (topic, page = 1) => {
+    const base = `${BASE_URL}/topics/${topic}-quotes`;
+    return page > 1 ? `${base}_${page}` : base;
 };
 
-const parseQuotes = ($, context) => {
-    const quotes = [];
+/**
+ * Build author page URL
+ * /authors/albert_einstein-quotes
+ */
+const buildAuthorUrl = (author, page = 1) => {
+    const base = `${BASE_URL}/authors/${author}-quotes`;
+    return page > 1 ? `${base}_${page}` : base;
+};
 
-    const candidates = $('.grid-item, article, .qti-list .listItem, .m-brick').filter((_, el) => {
-        const text = cleanText($(el).text());
-        return /quote/i.test(text) || $(el).find('a[href*="/quotes/"]').length;
-    });
+// ─────────────────────────────────────────────────────────────────────────────
+// QUOTE EXTRACTION
+// ─────────────────────────────────────────────────────────────────────────────
 
-    candidates.each((index, el) => {
-        const root = $(el);
-        const quoteText = root.find('a[title*="quote"], .b-qt, .quoteText, .qti-listm .clearfix a, [data-quote]').first().text().trim()
-            || root.attr('data-quote') || null;
-        const author = root.find('a[title*="author"], .bq-aut, .author, a[href*="/authors/"]').first().text().trim() || null;
-        const url = toAbs(root.find('a[href*="/quotes/"]').first().attr('href'))
-            || toAbs(root.find('a[title*="quote"], a:contains("quote")').first().attr('href'))
-            || context?.sourceUrl;
-        const tags = root.find('a[href*="/topics/"]').map((_, a) => $(a).text().trim()).get().filter(Boolean);
+/**
+ * Extract quotes from page using correct selectors
+ * Quote text: a.b-qt
+ * Author: a.bq-aut (next sibling)
+ */
+const extractQuotesFromPage = async (page, context) => {
+    const quotes = await page.evaluate((ctx) => {
+        const results = [];
+        const quoteElements = document.querySelectorAll('a.b-qt');
 
-        if (!quoteText) return;
+        quoteElements.forEach((quoteEl, index) => {
+            const quoteText = quoteEl.textContent?.trim();
+            if (!quoteText) return;
 
-        quotes.push({
-            quote: quoteText,
-            author: author || null,
-            topic: context?.topic || null,
-            tags: tags.length ? Array.from(new Set(tags)) : (context?.topic ? [context.topic] : []),
-            quote_url: url || null,
-            page: context?.page || 1,
-            position: quotes.length + 1,
-            source: context?.source || 'html',
-            source_url: context?.sourceUrl || null,
-            language: 'en',
+            // Author is typically the next sibling element
+            const authorEl = quoteEl.parentElement?.querySelector('a.bq-aut')
+                || quoteEl.nextElementSibling;
+            const author = authorEl?.textContent?.trim() || null;
+            const authorUrl = authorEl?.href || null;
+
+            // Quote URL
+            const quoteUrl = quoteEl.href || null;
+
+            // Extract tags from related topic links
+            const tagLinks = quoteEl.closest('.grid-item, .m-brick, article')
+                ?.querySelectorAll('a[href*="/topics/"]') || [];
+            const tags = Array.from(tagLinks)
+                .map((a) => a.textContent?.trim())
+                .filter(Boolean);
+
+            results.push({
+                quote: quoteText,
+                author,
+                author_url: authorUrl,
+                quote_url: quoteUrl,
+                topic: ctx.topic,
+                tags: tags.length ? [...new Set(tags)] : ctx.topic ? [ctx.topic] : [],
+                page: ctx.page,
+                position: index + 1,
+                source: 'playwright',
+                source_url: ctx.sourceUrl,
+                language: 'en',
+            });
         });
-    });
+
+        return results;
+    }, context);
 
     return quotes;
 };
 
-const fetchBody = async (url, proxyConfiguration) => {
-    const proxyUrl = proxyConfiguration ? await proxyConfiguration.newUrl() : undefined;
-    const { body } = await gotScraping({
-        url,
-        proxyUrl,
-        timeout: { request: 30000 },
-        headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/json' },
-        http2: true,
-    });
-    return body;
+/**
+ * Check if there's a next page available
+ */
+const hasNextPage = async (page, currentPage) => {
+    const nextPageNum = currentPage + 1;
+    const hasNext = await page.evaluate((nextNum) => {
+        // Look for pagination links
+        const paginationLinks = document.querySelectorAll('.pagination a, .pager a');
+        for (const link of paginationLinks) {
+            if (link.textContent?.includes(String(nextNum)) || link.textContent?.includes('Next')) {
+                return true;
+            }
+        }
+        // Also check if there are any quotes on the page
+        return document.querySelectorAll('a.b-qt').length > 0;
+    }, nextPageNum);
+    return hasNext;
 };
 
-const fetchApiPage = async (topic, page, proxyConfiguration) => {
-    const url = new URL('https://www.brainyquote.com/api/inf');
-    url.searchParams.set('typ', 'topic');
-    url.searchParams.set('langc', 'en');
-    url.searchParams.set('ab', '0');
-    url.searchParams.set('pg', String(page));
-    url.searchParams.set('tf', '1');
-    url.searchParams.set('t', topic);
-    const body = await fetchBody(url.href, proxyConfiguration);
-    return unwrapMaybeJson(body);
-};
-
-const fetchHtmlPage = async (topic, page, proxyConfiguration) => {
-    const url = topicUrl(topic, page);
-    const body = await fetchBody(url, proxyConfiguration);
-    return { body, url };
-};
-
-const normalizeAuthor = (value = '') => {
-    const trimmed = String(value).trim().toLowerCase();
-    return trimmed.replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '');
-};
+// ─────────────────────────────────────────────────────────────────────────────
+// MAIN SCRAPER
+// ─────────────────────────────────────────────────────────────────────────────
 
 async function main() {
     try {
@@ -125,107 +147,225 @@ async function main() {
             startUrls = [],
             maxPages: maxPagesRaw = 5,
             maxItems: maxItemsRaw = 200,
-            preferApi = true,
-            proxyConfiguration,
+            proxyConfiguration: proxyConfig,
         } = input;
 
-        const proxyConf = proxyConfiguration ? await Actor.createProxyConfiguration(proxyConfiguration) : undefined;
         const maxPages = Number.isFinite(+maxPagesRaw) ? Math.max(1, +maxPagesRaw) : 5;
         const maxItems = Number.isFinite(+maxItemsRaw) ? Math.max(1, +maxItemsRaw) : 200;
 
-        const topicList = [topic];
-        const normalizedTopics = topicList.map(normalizeTopic);
+        log.info('Starting BrainyQuote scraper', { topic, author, maxPages, maxItems });
+
+        // Create proxy configuration
+        const proxyConfiguration = proxyConfig
+            ? await Actor.createProxyConfiguration(proxyConfig)
+            : undefined;
+
+        // Track saved quotes
+        const seen = new Set();
+        let saved = 0;
+
+        // Build initial request queue
+        const requests = [];
+
+        // Add topic pages
+        const normalizedTopic = normalizeTopic(topic);
+        for (let page = 1; page <= maxPages; page++) {
+            requests.push({
+                url: buildTopicUrl(normalizedTopic, page),
+                userData: {
+                    type: 'topic',
+                    topic: normalizedTopic,
+                    page,
+                    label: `TOPIC_PAGE_${page}`,
+                },
+            });
+        }
+
+        // Add author pages if specified
+        if (author) {
+            const normalizedAuthor = normalizeAuthor(author);
+            if (normalizedAuthor) {
+                for (let page = 1; page <= maxPages; page++) {
+                    requests.push({
+                        url: buildAuthorUrl(normalizedAuthor, page),
+                        userData: {
+                            type: 'author',
+                            author: normalizedAuthor,
+                            topic: author,
+                            page,
+                            label: `AUTHOR_PAGE_${page}`,
+                        },
+                    });
+                }
+            }
+        }
+
+        // Add custom URL if specified
+        if (url) {
+            requests.push({
+                url,
+                userData: {
+                    type: 'custom',
+                    page: 1,
+                    label: 'CUSTOM_URL',
+                },
+            });
+        }
+
+        // Add start URLs
         const normalizedStartUrls = (Array.isArray(startUrls) ? startUrls : [])
             .map((s) => (typeof s === 'string' ? s : s?.url))
             .filter(Boolean);
 
-        if (author) {
-            const authorSlug = normalizeAuthor(author);
-            if (authorSlug) {
-                normalizedStartUrls.push(`https://www.brainyquote.com/authors/${authorSlug}-quotes`);
-            }
+        for (const startUrl of normalizedStartUrls) {
+            requests.push({
+                url: startUrl,
+                userData: {
+                    type: 'startUrl',
+                    page: 1,
+                    label: 'START_URL',
+                },
+            });
         }
-        if (url) {
-            normalizedStartUrls.push(url);
-        }
 
-        const seen = new Set();
-        let saved = 0;
+        log.info(`Queued ${requests.length} initial requests`);
 
-        for (const slug of normalizedTopics) {
-            if (saved >= maxItems) break;
-            log.info(`Scraping topic: ${slug}`);
+        // Create Playwright crawler with Firefox for stealth
+        const crawler = new PlaywrightCrawler({
+            launchContext: {
+                launcher: firefox,
+                launchOptions: {
+                    headless: true,
+                    args: ['--disable-blink-features=AutomationControlled'],
+                },
+                userAgent: getRandomUserAgent(),
+            },
+            proxyConfiguration,
+            maxConcurrency: 3,
+            maxRequestRetries: 3,
+            navigationTimeoutSecs: 60,
+            requestHandlerTimeoutSecs: 120,
 
-            for (let page = 1; page <= maxPages && saved < maxItems; page++) {
-                let html = null;
-                let sourceUrl = null;
-                let usedApi = false;
+            // Pre-navigation hooks for stealth
+            preNavigationHooks: [
+                async ({ page, request }) => {
+                    // Set random user agent
+                    await page.setExtraHTTPHeaders({
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'DNT': '1',
+                        'Upgrade-Insecure-Requests': '1',
+                    });
 
-                if (preferApi) {
-                    try {
-                        html = await fetchApiPage(slug, page, proxyConf);
-                        sourceUrl = `https://www.brainyquote.com/api/inf?typ=topic&t=${slug}&pg=${page}`;
-                        usedApi = true;
-                    } catch (err) {
-                        log.warning(`API fetch failed for topic=${slug}, page=${page}: ${err.message}. Falling back to HTML.`);
-                    }
+                    // Block unnecessary resources for speed
+                    await page.route('**/*', (route) => {
+                        const resourceType = route.request().resourceType();
+                        if (['image', 'font', 'media', 'stylesheet'].includes(resourceType)) {
+                            return route.abort();
+                        }
+                        // Block analytics and ads
+                        const url = route.request().url();
+                        if (url.includes('google-analytics') ||
+                            url.includes('googletagmanager') ||
+                            url.includes('facebook.net') ||
+                            url.includes('doubleclick')) {
+                            return route.abort();
+                        }
+                        return route.continue();
+                    });
+                },
+            ],
+
+            // Main request handler
+            requestHandler: async ({ page, request, log: crawlerLog }) => {
+                const { userData } = request;
+                const { type, topic: reqTopic, page: pageNum = 1 } = userData;
+
+                // Check if we've hit the limit
+                if (saved >= maxItems) {
+                    crawlerLog.info(`Reached maxItems limit (${maxItems}), skipping request`);
+                    return;
                 }
 
-                if (!html) {
-                    const res = await fetchHtmlPage(slug, page, proxyConf);
-                    html = res.body;
-                    sourceUrl = res.url;
-                    usedApi = false;
+                crawlerLog.info(`Processing: ${request.url} (type: ${type}, page: ${pageNum})`);
+
+                // Wait for quotes to load
+                try {
+                    await page.waitForSelector('a.b-qt', { timeout: 15000 });
+                } catch {
+                    crawlerLog.warning(`No quotes found on page: ${request.url}`);
+                    return;
                 }
 
-                const $ = cheerioLoad(html);
-                const items = parseQuotes($, { topic: slug, page, source: usedApi ? 'api' : 'html', sourceUrl });
+                // Random delay for stealth
+                await sleep(randomDelay(1000, 3000));
 
-                if (!items.length) {
-                    log.info(`No quotes found for topic=${slug} page=${page}; stopping pagination.`);
-                    break;
+                // Scroll to trigger any lazy loading
+                await page.evaluate(() => {
+                    window.scrollTo(0, document.body.scrollHeight / 2);
+                });
+                await sleep(500);
+                await page.evaluate(() => {
+                    window.scrollTo(0, document.body.scrollHeight);
+                });
+                await sleep(500);
+
+                // Extract quotes
+                const quotes = await extractQuotesFromPage(page, {
+                    topic: reqTopic || null,
+                    page: pageNum,
+                    sourceUrl: request.url,
+                });
+
+                if (quotes.length === 0) {
+                    crawlerLog.warning(`No quotes extracted from: ${request.url}`);
+                    return;
                 }
 
-                for (const item of items) {
+                crawlerLog.info(`Found ${quotes.length} quotes on page ${pageNum}`);
+
+                // Save quotes with deduplication
+                for (const quote of quotes) {
                     if (saved >= maxItems) break;
-                    const key = item.quote_url || `${item.topic}-${item.quote}`;
+
+                    // Create unique key for deduplication
+                    const key = quote.quote_url || `${quote.quote}-${quote.author}`;
                     if (key && seen.has(key)) continue;
                     if (key) seen.add(key);
 
                     await Dataset.pushData({
-                        ...item,
+                        ...quote,
                         scraped_at: new Date().toISOString(),
                     });
                     saved++;
-                }
-            }
-        }
 
-        if (normalizedStartUrls.length && saved < maxItems) {
-            for (const url of normalizedStartUrls) {
-                if (saved >= maxItems) break;
-                try {
-                    const body = await fetchBody(url, proxyConf);
-                    const $ = cheerioLoad(body);
-                    const items = parseQuotes($, { topic: null, page: 1, source: 'html', sourceUrl: url });
-                    for (const item of items) {
-                        if (saved >= maxItems) break;
-                        const key = item.quote_url || `${item.quote}-${item.author}`;
-                        if (key && seen.has(key)) continue;
-                        if (key) seen.add(key);
-                        await Dataset.pushData({ ...item, scraped_at: new Date().toISOString() });
-                        saved++;
+                    if (saved % 10 === 0) {
+                        crawlerLog.info(`Progress: ${saved}/${maxItems} quotes saved`);
                     }
-                } catch (err) {
-                    log.warning(`Failed to scrape startUrl=${url}: ${err.message}`);
                 }
-            }
-        }
+            },
 
-        log.info(`Finished. Saved ${saved} quotes.`);
+            // Handle failures gracefully
+            failedRequestHandler: async ({ request, log: crawlerLog }, error) => {
+                crawlerLog.error(`Request failed: ${request.url}`, { error: error.message });
+            },
+        });
+
+        // Run the crawler
+        await crawler.run(requests);
+
+        log.info(`Scraping completed. Total quotes saved: ${saved}`);
+
+    } catch (error) {
+        log.error('Scraper failed with error:', { error: error.message });
+        throw error;
     } finally {
         await Actor.exit();
     }
 }
 
-main().catch((err) => { console.error(err); process.exit(1); });
+main().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+});
