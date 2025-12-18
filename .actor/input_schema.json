@@ -1,0 +1,79 @@
+{
+  "title": "BrainyQuote Scraper",
+  "description": "Collect motivational and topic-based quotes from BrainyQuote using an API-first approach with HTML fallback and pagination.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Start URLs",
+      "type": "array",
+      "description": "Optional BrainyQuote topic or quote URLs to scrape in addition to topic pagination.",
+      "editor": "requestListSources",
+      "items": {
+        "type": "object",
+        "properties": {
+          "url": {
+            "type": "string",
+            "title": "URL",
+            "format": "uri"
+          }
+        },
+        "required": ["url"]
+      }
+    },
+    "topic": {
+      "title": "Primary topic",
+      "type": "string",
+      "description": "Topic slug without the '-quotes' suffix (e.g., motivational, success, happiness).",
+      "editor": "textfield",
+      "default": "motivational"
+    },
+    "author": {
+      "title": "Author",
+      "type": "string",
+      "description": "Search for quotes by a specific author (e.g., 'Albert Einstein').",
+      "editor": "textfield"
+    },
+    "url": {
+      "title": "URL",
+      "type": "string",
+      "description": "Specific BrainyQuote URL to scrape (e.g., a topic or author page).",
+      "editor": "textfield",
+      "format": "uri"
+    },
+    "maxPages": {
+      "title": "Max pages per topic",
+      "type": "integer",
+      "description": "How many paginated pages to visit per topic (including the first page).",
+      "minimum": 1,
+      "editor": "number",
+      "default": 5
+    },
+    "maxItems": {
+      "title": "Max quotes to collect",
+      "type": "integer",
+      "description": "Stop after saving this many quotes across all topics and start URLs.",
+      "minimum": 1,
+      "editor": "number",
+      "default": 200
+    },
+    "preferApi": {
+      "title": "Prefer BrainyQuote API",
+      "type": "boolean",
+      "description": "Use BrainyQuote's internal API endpoints first, then fall back to HTML pages when needed.",
+      "editor": "checkbox",
+      "default": true
+    },
+    "proxyConfiguration": {
+      "title": "Proxy configuration",
+      "type": "object",
+      "description": "Configure Apify Proxy. Datacenter proxy is sufficient for this target.",
+      "editor": "proxy",
+      "default": {
+        "useApifyProxy": true
+      }
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

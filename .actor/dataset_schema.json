@@ -1,0 +1,58 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "quote",
+          "author",
+          "topic",
+          "tags",
+          "quote_url",
+          "source",
+          "page",
+          "scraped_at"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "quote": {
+            "label": "Quote",
+            "format": "text"
+          },
+          "author": {
+            "label": "Author",
+            "format": "text"
+          },
+          "topic": {
+            "label": "Topic",
+            "format": "text"
+          },
+          "tags": {
+            "label": "Tags",
+            "format": "text"
+          },
+          "quote_url": {
+            "label": "Quote URL",
+            "format": "link"
+          },
+          "source": {
+            "label": "Source",
+            "format": "text"
+          },
+          "page": {
+            "label": "Page",
+            "format": "number"
+          },
+          "scraped_at": {
+            "label": "Scraped At",
+            "format": "datetime"
+          }
+        }
+      }
+    }
+  }
+}

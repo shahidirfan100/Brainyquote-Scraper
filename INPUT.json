@@ -1,0 +1,15 @@
+{
+  "startUrls": [
+    "https://www.brainyquote.com/topics/gratitude-quotes"
+  ],
+  "topic": "motivational",
+  "author": "Albert Einstein",
+  "url": "https://www.brainyquote.com/topics/success-quotes",
+  "topics": ["motivational", "success"],
+  "maxPages": 3,
+  "maxItems": 50,
+  "preferApi": true,
+  "proxyConfiguration": {
+    "useApifyProxy": true
+  }
+}

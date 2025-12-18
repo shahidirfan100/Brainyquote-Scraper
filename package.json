@@ -1,0 +1,15 @@
+{
+  "name": "brainyquote-scraper",
+  "version": "1.1.0",
+  "description": "BrainyQuote topic scraper that prefers JSON API responses with HTML fallback.",
+  "type": "module",
+  "scripts": {
+    "start": "node src/main.js"
+  },
+  "dependencies": {
+    "apify": "^3.4.5",
+    "crawlee": "^3.15.3",
+    "cheerio": "^1.0.0-rc.12",
+    "got-scraping": "^4.1.2"
+  }
+}
