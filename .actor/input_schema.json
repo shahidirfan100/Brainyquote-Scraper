@@ -15,8 +15,7 @@
           "url": {
             "type": "string",
             "title": "URL",
-            "description": "The BrainyQuote URL to scrape.",
-            "format": "uri"
+            "description": "The BrainyQuote URL to scrape."
           }
         },
         "required": ["url"]
@@ -39,8 +38,15 @@
       "title": "URL",
       "type": "string",
       "description": "Specific BrainyQuote URL to scrape (e.g., a topic or author page).",
-      "editor": "textfield",
-      "format": "uri"
+      "editor": "textfield"
+    },
+    "topics": {
+      "title": "Additional topics",
+      "type": "array",
+      "description": "Optional list of topics to scrape in one run. Values are slugified automatically.",
+      "items": {
+        "type": "string"
+      }
     },
     "maxPages": {
       "title": "Max pages per topic",
