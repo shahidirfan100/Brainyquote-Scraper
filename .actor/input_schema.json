@@ -44,6 +44,7 @@
       "title": "Additional topics",
       "type": "array",
       "description": "Optional list of topics to scrape in one run. Values are slugified automatically.",
+      "editor": "textarea",
       "items": {
         "type": "string"
       }
