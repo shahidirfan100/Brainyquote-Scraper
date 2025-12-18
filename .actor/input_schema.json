@@ -40,15 +40,6 @@
       "description": "Specific BrainyQuote URL to scrape (e.g., a topic or author page).",
       "editor": "textfield"
     },
-    "topics": {
-      "title": "Additional topics",
-      "type": "array",
-      "description": "Optional list of topics to scrape in one run. Values are slugified automatically.",
-      "editor": "textarea",
-      "items": {
-        "type": "string"
-      }
-    },
     "maxPages": {
       "title": "Max pages per topic",
       "type": "integer",

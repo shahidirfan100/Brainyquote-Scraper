@@ -1,77 +1,108 @@
 # BrainyQuote Quotes Scraper
 
-Collect motivational and topic-based quotes from BrainyQuote with an API-first approach and an HTML fallback that keeps results flowing even when the internal endpoint is rate-limited.
+**Collect inspirational and motivational quotes from BrainyQuote effortlessly.** This Apify actor scrapes quotes by topic, author, or custom URLs, prioritizing API access with HTML fallback for reliable data extraction.
 
-<p><strong>Designed for Apify:</strong> clean input schema, dataset views, proxy support, and pagination controls so runs pass QA without surprises.</p>
+## Features
 
-## What this actor does
+- **Topic-Based Scraping**: Scrape quotes from popular topics like motivational, success, happiness, and leadership.
+- **Author Search**: Find quotes from specific authors such as Albert Einstein or Mahatma Gandhi.
+- **Custom URLs**: Add start URLs for targeted scraping of quote pages or author profiles.
+- **API-First Approach**: Uses BrainyQuote's internal API for fast results, falls back to HTML parsing if needed.
+- **Pagination Support**: Automatically handles page navigation with configurable limits.
+- **Deduplication**: Removes duplicate quotes across runs for clean datasets.
+- **Proxy Integration**: Built-in Apify Proxy support for scalable and compliant scraping.
+- **SEO-Friendly Output**: Structured data with quotes, authors, topics, and timestamps for easy indexing.
 
-- Targets BrainyQuote topics such as motivational, success, happiness, and more.
-- Tries the BrainyQuote API endpoint first, then gracefully falls back to HTML pages.
-- Paginates through `?pg=` pages until `maxPages` or `maxItems` is reached.
-- Deduplicates quote URLs across topics and custom start URLs.
-- Stores a tidy dataset with quote, author, topic, tags, source type, page number, and timestamps.
+## Input Parameters
 
-## Quick start
-
-1. Open the actor on Apify and provide a topic (e.g., `motivational`) or a list under **Additional topics**.
-2. Leave **Prefer BrainyQuote API** enabled; set **Max pages per topic** and **Max quotes to collect** as needed.
-3. Run the actor. Results appear in the default dataset view (`overview`) with ready-to-download links.
-
-## Input fields
+Configure the scraper with these input fields:
 
 | Field | Type | Default | Description |
-| --- | --- | --- | --- |
-| topic | string | motivational | Primary topic slug without `-quotes`. |
-| topics | array<string> | — | Optional list of topics to scrape in one run. |
-| maxPages | integer | 5 | How many paginated pages to fetch per topic. |
-| maxItems | integer | 200 | Global quote limit across all topics and start URLs. |
-| preferApi | boolean | true | Use the internal BrainyQuote API first; fall back to HTML if unavailable. |
-| startUrls | array<Request> | — | Optional BrainyQuote topic or quote URLs to scrape directly. |
-| proxyConfiguration | object | `{ "useApifyProxy": true }` | Configure Apify Proxy. |
+|-------|------|---------|-------------|
+| `topic` | string | `motivational` | Primary topic slug (e.g., `motivational`, `success`). |
+| `author` | string | - | Author name for quote search (e.g., `Albert Einstein`). |
+| `url` | string | - | Direct BrainyQuote URL to scrape. |
+| `startUrls` | array | - | List of URLs for additional scraping. |
+| `maxPages` | integer | 5 | Maximum pages per topic to scrape. |
+| `maxItems` | integer | 200 | Total quotes to collect. |
+| `preferApi` | boolean | `true` | Prefer API over HTML scraping. |
+| `proxyConfiguration` | object | `{ "useApifyProxy": true }` | Proxy settings for Apify. |
 
-## Output
+## Output Data
 
-Each dataset item looks like this:
+Each scraped quote is saved as a dataset item with this structure:
 
-```
+```json
 {
-  "quote": "The future depends on what you do today.",
-  "author": "Mahatma Gandhi",
+  "quote": "The only way to do great work is to love what you do.",
+  "author": "Steve Jobs",
   "topic": "motivational",
-  "tags": ["motivational"],
-  "quote_url": "https://www.brainyquote.com/quotes/mahatma_gandhi_109075",
+  "tags": ["motivational", "work"],
+  "quote_url": "https://www.brainyquote.com/quotes/steve_jobs_123456",
   "source": "api",
   "page": 1,
   "scraped_at": "2025-12-18T10:00:00.000Z"
 }
 ```
 
-## How it works
+- **quote**: The full quote text.
+- **author**: Quote author (if available).
+- **topic**: Associated topic.
+- **tags**: Related tags.
+- **quote_url**: Link to the original quote page.
+- **source**: Data source (`api` or `html`).
+- **page**: Page number where found.
+- **scraped_at**: Timestamp of scraping.
 
-- Normalizes topics (removes `-quotes`, slugifies spaces) and builds topic URLs.
-- Calls `https://www.brainyquote.com/api/inf` with topic and page parameters. If it fails or returns empty HTML, it switches to the topic page `https://www.brainyquote.com/topics/{topic}-quotes?pg={n}`.
-- Parses quote cards, authors, and topic links, de-duplicates by quote URL, and stops when `maxItems` is met.
-- Saves everything to the default dataset with the `overview` view for quick inspection.
+## Usage Examples
 
-## Usage tips
+### Scrape Motivational Quotes
+Set `topic` to `motivational` and run for up to 200 quotes.
 
-- Keep **preferApi** on for speed; turn it off only if you consistently see empty API responses.
-- Increase **maxPages** for broader coverage; lower **maxItems** for lightweight tests.
-- Add **startUrls** for niche topics or individual quote pages you want included.
-- Use Apify Proxy for stability; datacenter proxy is usually sufficient.
+### Search by Author
+Enter `Albert Einstein` in `author` to collect Einstein's quotes.
+
+### Custom URL Scraping
+Provide a BrainyQuote URL in `url` or `startUrls` for specific pages.
+
+### Large-Scale Collection
+Increase `maxPages` to 10 and `maxItems` to 1000 for extensive datasets.
+
+## Configuration Tips
+
+- **API vs. HTML**: Enable `preferApi` for speed; disable if API blocks occur.
+- **Pagination**: Adjust `maxPages` based on topic popularity.
+- **Limits**: Use `maxItems` to control dataset size and costs.
+- **Proxies**: Always use Apify Proxy for ethical scraping.
+
+## How It Works
+
+1. **Input Processing**: Normalizes topics and builds URLs.
+2. **API Attempt**: Queries BrainyQuote API for quotes.
+3. **Fallback Parsing**: If API fails, parses HTML pages.
+4. **Data Extraction**: Collects quotes, authors, and metadata.
+5. **Deduplication**: Ensures unique quotes.
+6. **Output**: Saves to Apify dataset with overview view.
 
 ## Troubleshooting
 
-- Empty dataset: check that the topic exists on BrainyQuote (e.g., try `motivational`, `success`, `leadership`).
-- Repeated quotes: ensure `startUrls` do not overlap heavily with the selected topics.
-- Pagination stops early: BrainyQuote may not have more pages for that topic; reduce **maxPages** or switch topics.
+- **No Results**: Verify topic/author exists on BrainyQuote.
+- **API Errors**: Switch `preferApi` to `false`.
+- **Duplicates**: Check for overlapping URLs.
+- **Rate Limits**: Reduce `maxPages` or use proxies.
+- **Timeouts**: Lower `maxItems` for faster runs.
 
-## Running locally
+## Running Locally
 
-```
+For local testing:
+
+```bash
 npm install
 npm start
 ```
 
-Provide input via `INPUT.json` or the Apify CLI. Results land in the default dataset directory created by the platform.
+Use `INPUT.json` for configuration. Results save to the dataset folder.
+
+---
+
+**Boost your content with fresh quotes!** This scraper helps bloggers, marketers, and developers access inspirational content easily.

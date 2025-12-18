@@ -120,7 +120,6 @@ async function main() {
         const input = (await Actor.getInput()) || {};
         const {
             topic = DEFAULT_TOPIC,
-            topics = [],
             author = '',
             url = '',
             startUrls = [],
@@ -134,7 +133,7 @@ async function main() {
         const maxPages = Number.isFinite(+maxPagesRaw) ? Math.max(1, +maxPagesRaw) : 5;
         const maxItems = Number.isFinite(+maxItemsRaw) ? Math.max(1, +maxItemsRaw) : 200;
 
-        const topicList = Array.isArray(topics) && topics.length ? topics : [topic];
+        const topicList = [topic];
         const normalizedTopics = topicList.map(normalizeTopic);
         const normalizedStartUrls = (Array.isArray(startUrls) ? startUrls : [])
             .map((s) => (typeof s === 'string' ? s : s?.url))
