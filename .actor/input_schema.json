@@ -18,7 +18,9 @@
             "description": "The BrainyQuote URL to scrape."
           }
         },
-        "required": ["url"]
+        "required": [
+          "url"
+        ]
       }
     },
     "topic": {
@@ -32,12 +34,6 @@
       "title": "Author",
       "type": "string",
       "description": "Search for quotes by a specific author (e.g., 'Albert Einstein').",
-      "editor": "textfield"
-    },
-    "url": {
-      "title": "URL",
-      "type": "string",
-      "description": "Specific BrainyQuote URL to scrape (e.g., a topic or author page).",
       "editor": "textfield"
     },
     "maxPages": {
