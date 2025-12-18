@@ -15,6 +15,7 @@
           "url": {
             "type": "string",
             "title": "URL",
+            "description": "The BrainyQuote URL to scrape.",
             "format": "uri"
           }
         },
