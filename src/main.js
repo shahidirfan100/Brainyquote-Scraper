@@ -75,11 +75,22 @@ const extractQuotesFromPage = async (page, context) => {
             const authorUrl = authorEl?.href || null;
             const quoteUrl = quoteEl.href || null;
 
-            const tagLinks = quoteEl.closest('.grid-item, .m-brick, article')
-                ?.querySelectorAll('a[href*="/topics/"]') || [];
-            const tags = Array.from(tagLinks)
-                .map((a) => a.textContent?.trim())
-                .filter(Boolean);
+            // Find tags from the quote card - look for topic links within the container
+            const container = quoteEl.closest('.grid-item, .m-brick, .bqQt, [class*="quote"]')
+                || quoteEl.parentElement?.parentElement;
+            const tagLinks = container?.querySelectorAll('a[href*="/topics/"]') || [];
+
+            // Extract tag names from links, filtering out duplicates and empty values
+            const extractedTags = Array.from(tagLinks)
+                .map((a) => {
+                    // Get tag from text or from URL path
+                    const text = a.textContent?.trim();
+                    if (text) return text;
+                    const match = a.href?.match(/\/topics\/([^-]+)-quotes/);
+                    return match ? match[1] : null;
+                })
+                .filter(Boolean)
+                .filter((tag) => tag.toLowerCase() !== 'quotes');
 
             results.push({
                 quote: quoteText,
@@ -87,10 +98,9 @@ const extractQuotesFromPage = async (page, context) => {
                 author_url: authorUrl,
                 quote_url: quoteUrl,
                 topic: ctx.topic,
-                tags: tags.length ? [...new Set(tags)] : ctx.topic ? [ctx.topic] : [],
+                tags: extractedTags.length ? [...new Set(extractedTags)] : [],
                 page: ctx.page,
                 position: index + 1,
-                source: 'playwright',
                 language: 'en',
             });
         });
